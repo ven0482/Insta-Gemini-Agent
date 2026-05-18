@@ -1,0 +1,6 @@
+{
+  "name": "InstaAgent AI",
+  "description": "AI-powered social media manager that discovers viral trends, prepares content, and automates Instagram posting.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,41 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Playfair+Display:ital,wght@1,400;1,700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-serif: "Playfair Display", serif;
+  
+  --color-dash-bg: #09090b;
+  --color-dash-ink: #f4f4f5;
+  --color-dash-line: #27272a;
+}
+
+body {
+  @apply bg-dash-bg text-dash-ink font-sans overflow-hidden;
+}
+
+.bento-card {
+  @apply bg-zinc-900/50 border border-dash-line rounded-3xl p-6 transition-all duration-300;
+}
+
+.bento-card:hover {
+  @apply border-zinc-700 bg-zinc-900/80;
+}
+
+.data-row {
+  @apply flex items-center gap-3 p-3 bg-zinc-800/30 rounded-2xl border border-zinc-700/50 transition-all duration-200 cursor-pointer;
+}
+
+.data-row:hover {
+  @apply bg-zinc-800/60 border-zinc-600;
+}
+
+.col-header {
+  @apply font-mono text-[10px] opacity-40 uppercase tracking-widest font-bold;
+}
+
+.data-value {
+  @apply font-mono text-[13px] tracking-tight;
+}
+

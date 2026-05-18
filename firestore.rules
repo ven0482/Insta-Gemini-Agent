@@ -1,0 +1,65 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Settings Collection
+    match /settings/{userId} {
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Profiles Collection
+    match /profiles/{profileId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidProfile(incoming());
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+
+      function isValidProfile(data) {
+        return data.keys().hasAll(['handle', 'addedAt', 'userId']) &&
+               data.keys().size() == 3 &&
+               data.handle is string && data.handle.size() <= 100 &&
+               data.addedAt is timestamp &&
+               data.userId == request.auth.uid;
+      }
+    }
+
+    // Posts Collection
+    match /posts/{postId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidPost(incoming());
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid && isValidPost(incoming()) && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'scheduledAt', 'caption', 'topic', 'imageUrl', 'hashtags', 'postedAt'])
+      );
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+
+      function isValidPost(data) {
+        return data.keys().hasAll(['caption', 'topic', 'status', 'createdAt', 'userId']) &&
+               data.caption is string && data.caption.size() <= 2200 &&
+               data.topic is string && data.topic.size() <= 200 &&
+               data.status in ['draft', 'scheduled', 'posted'] &&
+               data.createdAt is timestamp &&
+               data.userId == request.auth.uid &&
+               (!data.keys().contains('hashtags') || (data.hashtags is list && data.hashtags.size() <= 30));
+      }
+    }
+  }
+}
