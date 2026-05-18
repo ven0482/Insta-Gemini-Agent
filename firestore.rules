@@ -61,5 +61,21 @@ service cloud.firestore {
                (!data.keys().contains('hashtags') || (data.hashtags is list && data.hashtags.size() <= 30));
       }
     }
+
+    // Research Collection
+    match /research/{researchId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidResearch(incoming());
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid && isValidResearch(incoming());
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+
+      function isValidResearch(data) {
+        return data.keys().hasAll(['suggestions', 'analyzedAt', 'userId']) &&
+               data.keys().size() == 3 &&
+               data.suggestions is list &&
+               data.analyzedAt is timestamp &&
+               data.userId == request.auth.uid;
+      }
+    }
   }
 }

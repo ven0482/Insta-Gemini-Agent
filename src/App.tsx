@@ -25,6 +25,7 @@ import {
   query, 
   orderBy, 
   where,
+  limit,
   onSnapshot,
   serverTimestamp,
   updateDoc,
@@ -75,6 +76,7 @@ export default function App() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
   const [drafts, setDrafts] = useState<PostDraft[]>([]);
+  const [lastResearchDate, setLastResearchDate] = useState<any>(null);
   const [activeStatus, setActiveStatus] = useState<string | null>(null);
 
   // Cooldown timer
@@ -130,10 +132,26 @@ export default function App() {
       setPosts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Post)));
     }, (err) => handleFirestoreError(err, OperationType.GET, 'posts'));
 
+    // Listen to research
+    const qResearch = query(
+      collection(db, 'research'),
+      where('userId', '==', user.uid),
+      orderBy('analyzedAt', 'desc'),
+      limit(1)
+    );
+    const unsubscribeResearch = onSnapshot(qResearch, (snapshot) => {
+      if (!snapshot.empty) {
+        const data = snapshot.docs[0].data();
+        setDrafts(data.suggestions || []);
+        setLastResearchDate(data.analyzedAt);
+      }
+    }, (err) => handleFirestoreError(err, OperationType.GET, 'research'));
+
     return () => {
       unsubscribeSettings();
       unsubscribeProfiles();
       unsubscribePosts();
+      unsubscribeResearch();
     };
   }, [user]);
 
@@ -212,6 +230,13 @@ export default function App() {
       if (Array.isArray(data)) {
         setDrafts(data);
         setActiveStatus("Insights synthesized. Ready for review.");
+        
+        // Persist research results
+        await addDoc(collection(db, 'research'), {
+          suggestions: data,
+          analyzedAt: serverTimestamp(),
+          userId: user.uid
+        });
       } else {
         throw new Error("Invalid response format from agent");
       }
@@ -320,7 +345,14 @@ export default function App() {
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight">InstaAgent AI</h1>
-            <p className="text-[10px] text-zinc-500 font-mono uppercase tracking-widest">{user.displayName || 'Agent Active'}</p>
+            <div className="flex items-center gap-2">
+              <p className="text-[10px] text-zinc-500 font-mono uppercase tracking-widest">{user.displayName || 'Agent Active'}</p>
+              {settings.myHandle && (
+                <span className="text-[9px] bg-indigo-500/20 text-indigo-400 px-1.5 py-0.5 rounded border border-indigo-500/30 font-bold uppercase tracking-tighter">
+                  Targeting {settings.myHandle}
+                </span>
+              )}
+            </div>
           </div>
         </div>
         
@@ -401,7 +433,9 @@ export default function App() {
                 <div className="flex justify-between items-center">
                   <div>
                     <h2 className="text-lg font-bold">Content Pipeline</h2>
-                    <p className="text-xs text-zinc-500 uppercase tracking-widest font-mono">Simulated Posting Queue</p>
+                    <p className="text-xs text-zinc-500 uppercase tracking-widest font-mono">
+                      {lastResearchDate ? `Last Synced: ${lastResearchDate.toDate?.()?.toLocaleString()}` : "Simulated Posting Queue"}
+                    </p>
                   </div>
                   <button 
                     onClick={generatePostDrafts}
@@ -504,46 +538,64 @@ export default function App() {
                   </div>
                 </div>
                 <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3">
-                  {posts.filter(p => p.status !== 'posted').map((post) => (
-                    <div key={post.id} className="flex flex-col gap-2 group hover:bg-zinc-900 p-2 rounded transition-colors border border-transparent hover:border-zinc-800">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <span className="text-zinc-600">[{post.createdAt?.toDate?.()?.toLocaleTimeString() || '00:00:00'}]</span>
-                          <span className="text-zinc-300 truncate w-48 md:w-64">{post.topic}</span>
-                          <span className={cn(
-                            "px-2 py-0.5 border rounded text-[8px] uppercase",
-                            post.status === 'scheduled' ? "border-indigo-500/50 text-indigo-400" : "border-zinc-700 text-zinc-500"
-                          )}>
-                            {post.status}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                           {post.status === 'scheduled' && (
-                             <span className="text-[9px] text-indigo-300 font-mono italic">
-                               {post.scheduledAt?.toDate?.()?.toLocaleString()}
-                             </span>
-                           )}
-                           <button 
-                             onClick={() => postNow(post)}
-                             className="bg-zinc-800 text-zinc-400 p-1.5 rounded hover:bg-zinc-100 hover:text-zinc-900 transition-all opacity-0 group-hover:opacity-100"
-                           >
-                             <Send className="w-3 h-3" />
-                           </button>
-                        </div>
+                  {posts.filter(p => p.status === 'scheduled').length > 0 && (
+                    <div className="mb-4">
+                      <p className="text-[9px] text-indigo-400 font-black uppercase mb-2">Upcoming Schedule</p>
+                      <div className="space-y-2">
+                        {posts.filter(p => p.status === 'scheduled').sort((a,b) => a.scheduledAt?.toDate?.() - b.scheduledAt?.toDate?.()).map(post => (
+                          <div key={post.id} className="bg-indigo-500/5 border border-indigo-500/20 p-3 rounded-xl flex items-center justify-between">
+                            <div className="flex flex-col">
+                              <span className="text-[10px] text-zinc-300 font-bold truncate w-48">{post.topic}</span>
+                              <span className="text-[8px] text-indigo-400 font-mono italic">
+                                {post.scheduledAt?.toDate?.()?.toLocaleString()}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+                              <button 
+                                onClick={() => postNow(post)}
+                                className="bg-zinc-800 text-zinc-400 p-1.5 rounded hover:bg-white hover:text-black transition-all"
+                              >
+                                <Send className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                      
-                      {post.status === 'draft' && (
-                        <div className="flex items-center gap-2 pl-24">
-                           <span className="text-[9px] text-zinc-600 uppercase font-bold tracking-widest">Schedule:</span>
-                           <input 
-                             type="datetime-local" 
-                             className="bg-zinc-800 text-[10px] text-zinc-300 border-none rounded px-2 py-0.5 focus:outline-none"
-                             onChange={(e) => schedulePost(post, e.target.value)}
-                           />
-                        </div>
-                      )}
                     </div>
-                  ))}
+                  )}
+
+                  {posts.filter(p => p.status === 'draft').length > 0 && (
+                    <div>
+                      <p className="text-[9px] text-zinc-500 font-black uppercase mb-2">Unscheduled Drafts</p>
+                      <div className="space-y-2">
+                        {posts.filter(p => p.status === 'draft').map((post) => (
+                          <div key={post.id} className="flex flex-col gap-2 group hover:bg-zinc-900 p-2 rounded transition-colors border border-transparent hover:border-zinc-800">
+                            <div className="flex items-center justify-between font-mono">
+                              <div className="flex items-center gap-3">
+                                <span className="text-zinc-600">[{post.createdAt?.toDate?.()?.toLocaleTimeString() || '00:00:00'}]</span>
+                                <span className="text-zinc-300 truncate w-48 md:w-64">{post.topic}</span>
+                              </div>
+                              <button 
+                                 onClick={() => postNow(post)}
+                                 className="bg-zinc-800 text-zinc-400 p-1.5 rounded hover:bg-zinc-100 hover:text-zinc-900 transition-all opacity-0 group-hover:opacity-100"
+                               >
+                                 <Send className="w-3 h-3" />
+                               </button>
+                            </div>
+                            <div className="flex items-center gap-2 pl-24">
+                               <span className="text-[9px] text-zinc-600 uppercase font-bold tracking-widest">Schedule:</span>
+                               <input 
+                                 type="datetime-local" 
+                                 className="bg-zinc-800 text-[10px] text-zinc-300 border-none rounded px-2 py-0.5 focus:outline-none"
+                                 onChange={(e) => schedulePost(post, e.target.value)}
+                               />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {posts.filter(p => p.status !== 'posted').length === 0 && (
                     <p className="text-center py-4 text-zinc-700 italic">No operations in queue.</p>
                   )}

@@ -36,6 +36,28 @@
         "tone": { "type": "string" },
         "updatedAt": { "type": "string", "format": "date-time" }
       }
+    },
+    "Research": {
+      "title": "Analytic Research",
+      "description": "Last successful AI analysis result.",
+      "type": "object",
+      "properties": {
+        "suggestions": { "type": "array", "items": { "$ref": "PostDraft" } },
+        "analyzedAt": { "type": "string", "format": "date-time" },
+        "userId": { "type": "string" }
+      },
+      "required": ["suggestions", "analyzedAt", "userId"]
+    },
+    "PostDraft": {
+      "title": "Post Draft Suggestion",
+      "type": "object",
+      "properties": {
+        "topic": { "type": "string" },
+        "caption": { "type": "string" },
+        "imagePrompt": { "type": "string" },
+        "strategy": { "type": "string" },
+        "hashtags": { "type": "array", "items": { "type": "string" } }
+      }
     }
   },
   "firestore": {
@@ -50,6 +72,10 @@
     "posts": {
       "schema": "Post",
       "description": "Collection of generated social media posts."
+    },
+    "research": {
+      "schema": "Research",
+      "description": "Storage for last AI analysis suggestions."
     }
   }
 }
